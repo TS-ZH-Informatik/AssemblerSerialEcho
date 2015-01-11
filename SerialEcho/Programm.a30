@@ -1,0 +1,154 @@
+;------------------------------------------------------------------------
+;                                                                       |
+;   FILE        :für Uebungsprogramme mit Display                       |
+;   DATE        :Nov 2014                                               |
+;   DESCRIPTION :Template für M16C65 Uebungen an der Juventus           |
+;   CPU GROUP   :M16C65                                                 |
+;   Owner       :Martin Burger                                          |
+;                                                                       |
+;   Version: 1.0                                                        |
+;                                                                       |
+;------------------------------------------------------------------------
+
+
+;*********************************************************************
+;
+;     *** Include Files ***
+;
+;*********************************************************************
+	.include sfr65.inc
+	.include Init_M16C65.inc
+	.include displaydriver.inc
+	.include clockdriver.inc
+
+
+ProgramStart:
+
+;*********************************************************************
+;
+;     *** Initialization ***
+;
+;*********************************************************************	
+	JSR clockInit
+	JSR displayInit
+	JSR displayClearBuffer
+
+	;00000000 => 0x00 ; UART Clock select register
+	mov.b #00h, uclksel0
+	bclr ocosel0
+	
+	;00000010 Peripheral Clock Select register
+	bset pclk1
+	
+	;00000101 UARTi Transmit/Receive Mode Register
+	mov.b #05h, u0mr
+	
+	; UARTi Transmit/Receive control register 0
+	; default
+	
+	; UARTi Transmit/Receive control register 1
+	bset te_u0c1
+	bset ti_u0c1
+	bset re_u0c1
+	
+	; UARTi Transmit/Receive Control Register 2
+	bset u0rrm
+	
+	; UARTi Transmit Buffer Register
+	; U0TB
+	
+	; UARTi Receive buffer register
+	; U0RB
+	
+	; UART0 Bit Rate Register, Baud => 38400
+	mov.b #026h, u0brg
+	
+	; Interupt Controll register level
+	mov.b #01h, s0ric
+	
+	
+	fset i
+	
+	CurrentDisplayPos .equ 0400h
+	mov.w #00, 400h 
+	
+
+;*********************************************************************
+;
+;     *** Programm ***
+;
+;*********************************************************************	
+	
+Loop:	
+	nop
+	nop
+	nop
+	jmp Loop
+	
+NextDisplayPos:
+	push.w r1
+	mov.w CurrentDisplayPos, r1 ; DisplayPos laden
+	cmp.b #07, r1l ; Zeilenende erreicht?
+	JEQ GoToNextLine ; Dann zur nächsten Zeile
+	add.b #01, r1l ; Sonst nächste Spalte
+	JMP EndNextDisplayPos
+GoToNextLine:
+	JSR NextLine
+	JMP EndNextDisplayPos
+EndNextDisplayPos:
+	mov.w r1, CurrentDisplayPos ; Neue DisplayPos speichern
+	pop.w r1
+	RTS
+	
+NextLine:
+	mov.b #00, r1l ; DisplayPos, erste Spalte
+	cmp.b #01, r1h ; Zeile 1?
+	JEQ First ; Dann sezte Zeile 0
+	JMP Second ; Sonst setze Zeile 1
+First:
+	mov.b #00, r1h
+	RTS
+Second:
+	mov.b #01, r1h
+	RTS
+
+
+;*********************************************************************
+;
+;     *** Interrupts ***
+;
+;*********************************************************************	
+
+
+
+
+; dummy interrupt function
+;---------------------------------------------------------------------
+
+dummy_int:
+		reit
+		
+uart0receive:
+		
+		push.w r0
+		
+		Mov.w CurrentDisplayPos,R0 ; Displayposition laden
+		JSR displaySetPos ; Displayposition setzen		
+		
+		mov.w u0rb, r0 ; Empfangener Wert
+		mov.b r0l, u0tb ; Transmit register, Echo: Zurück schicken
+		
+		JSR displayWriteChar
+		JSR displayForceUpdate
+		JSR NextDisplayPos
+		
+		pop.w r0
+				
+		reit
+
+; Interrupt Vektoren
+;---------------------------------------------------------------------
+	.include IRQ_Vect.inc
+		
+
+.End	
